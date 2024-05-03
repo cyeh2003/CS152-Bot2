@@ -1,12 +1,15 @@
 from enum import Enum, auto
 import discord
 import re
+import asyncio
+
 
 class State(Enum):
     REPORT_START = auto()
     AWAITING_MESSAGE = auto()
     MESSAGE_IDENTIFIED = auto()
     REPORT_COMPLETE = auto()
+
 
 class Report:
     START_KEYWORD = "report"
@@ -17,7 +20,7 @@ class Report:
         self.state = State.REPORT_START
         self.client = client
         self.message = None
-    
+
     async def handle_message(self, message):
         '''
         This function makes up the meat of the user-side reporting flow. It defines how we transition between states and what 
@@ -28,15 +31,15 @@ class Report:
         if message.content == self.CANCEL_KEYWORD:
             self.state = State.REPORT_COMPLETE
             return ["Report cancelled."]
-        
+
         if self.state == State.REPORT_START:
-            reply =  "Thank you for starting the reporting process. "
+            reply = "Thank you for starting the reporting process. "
             reply += "Say `help` at any time for more information.\n\n"
             reply += "Please copy paste the link to the message you want to report.\n"
             reply += "You can obtain this link by right-clicking the message and clicking `Copy Message Link`."
             self.state = State.AWAITING_MESSAGE
             return [reply]
-        
+
         if self.state == State.AWAITING_MESSAGE:
             # Parse out the three ID strings from the message link
             m = re.search('/(\d+)/(\d+)/(\d+)', message.content)
@@ -49,24 +52,45 @@ class Report:
             if not channel:
                 return ["It seems this channel was deleted or never existed. Please try again or say `cancel` to cancel."]
             try:
-                message = await channel.fetch_message(int(m.group(3)))
+                fetched_message = await channel.fetch_message(int(m.group(3)))
             except discord.errors.NotFound:
                 return ["It seems this message was deleted or never existed. Please try again or say `cancel` to cancel."]
 
             # Here we've found the message - it's up to you to decide what to do next!
             self.state = State.MESSAGE_IDENTIFIED
-            return ["I found this message:", "```" + message.author.name + ": " + message.content + "```", \
-                    "This is all I know how to do right now - it's up to you to build out the rest of my reporting flow!"]
-        
-        if self.state == State.MESSAGE_IDENTIFIED:
-            return ["<insert rest of reporting flow here>"]
 
-        return []
+        if self.state == State.MESSAGE_IDENTIFIED:
+            print("State is MESSAGE_IDENTIFIED")
+            category_1 = "1"
+            category_2 = "2"
+            category_3 = "3"
+            reply = "I found this message:" + "```" + fetched_message.author.name + ": " + fetched_message.content + "```" + \
+                "Please select what the message is in violation of:\n" + \
+                    category_1 + "\n" + category_2 + "\n" + category_3
+            await message.channel.send(reply)
+
+            def check(m):
+                return m.channel == message.channel
+
+            try:
+                response = await self.client.wait_for('message', check=check, timeout=60.0)
+            except asyncio.TimeoutError:
+                await message.channel.send('Sorry, you took too long to respond.')
+            else:
+                while response.content not in ["1", "2", "3"]:
+                    await message.channel.send('Please select from the provided list')
+                    response = await self.client.wait_for('message', check=check, timeout=60.0)
+
+                if response.content == "1":
+                    await message.channel.send('You selected option 1.')
+                    r = "Please provide further context"
+                    await message.channel.send(r)
+                    context = await self.client.wait_for('message', check=check, timeout=60.0)
+                    await message.channel.send('You said "' + context.content + '", Thank you.')
+                elif response.content == "2":
+                    await message.channel.send('You selected option 2.')
+                elif response.content == "3":
+                    await message.channel.send('You selected option 3.')
 
     def report_complete(self):
         return self.state == State.REPORT_COMPLETE
-    
-
-
-    
-
