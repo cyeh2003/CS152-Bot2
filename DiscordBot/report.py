@@ -130,8 +130,7 @@ class Report:
             # Logic for storing context somewhere
 
             #
-            reply = "Thank you for providing additional context to our team. Your report has been \
-                sumbitted for review. Would you like to block this user?"
+            reply = "Thank you for providing additional context to our team. Your report has been sumbitted for review. Would you like to block this user?"
             self.state = State.ASK_TO_BLOCK
             return [reply]
 
