@@ -10,10 +10,25 @@ class State(Enum):
     MESSAGE_IDENTIFIED = auto()
     SELECT_CATEGORY = auto()
     SELECT_SUB_CATEGORY = auto()
+    CHOOSE_PROVIDE_GENERAL_CONTEXT = auto()
     CHOOSE_PROVIDE_CONTEXT = auto()
     PROVIDE_CONTEXT = auto()
     ASK_TO_BLOCK = auto()
     REPORT_COMPLETE = auto()
+
+    MOD_FLOW_START = auto()
+    MOD_DECIDE_INCITEMENT = auto()
+    MOD_CHECK_IMMINENT_DANGER = auto()
+    MOD_SUBMIT_MESSAGE = auto()
+    MOD_SELECT_VIOLATION = auto()
+    MOD_WRITE_EXPLANATION = auto()
+    MOD_DECIDE_INCITEMENT_ABUSE = auto()
+    MOD_CHOOSE_BAN = auto()
+    MOD_CHOOSE_BAN_DURATION = auto()
+    MOD_TEMP_BAN_EXPLANATION = auto()
+    MOD_PERMA_BAN_EXPLANATION = auto()
+    MOD_CHOOSE_ESCALATE = auto()
+    MOD_FINISH = auto()
 
 
 class Report:
@@ -25,14 +40,151 @@ class Report:
         self.state = State.REPORT_START
         self.client = client
         self.message = None
+        self.reported_user = None
+
+    async def handle_mod_message(self, message):
+        self.state = State.MOD_FLOW_START
+
+        if self.state == State.MOD_FLOW_START:
+            print("State is", self.state)
+
+            reply = "Based on the report summary, is this report related to incitement of violence?"
+            self.state = State.MOD_DECIDE_INCITEMENT
+            return [reply]
+
+        if self.state == State.MOD_DECIDE_INCITEMENT:
+            print("State is", self.state)
+
+            if message.content.lower() not in ["yes", "no"]:
+                reply = "Please respond in Yes or No."
+            else:
+                if message.content.lower() == "yes":
+                    reply = "Based on the report summary above, do you find that this content violates our incitement to violence policy?"
+                    State.MOD_DECIDE_INCITEMENT_ABUSE
+                else:
+                    reply = "No action will be taken. Report completed."
+                    State.MOD_FINISH
+            return [reply]
+
+        if self.state == State.MOD_DECIDE_INCITEMENT_ABUSE:
+            print("State is", self.state)
+
+            if message.content.lower() not in ["yes", "no"]:
+                reply = "Please respond in Yes or No."
+            else:
+                if message.content.lower() == "yes":
+                    reply = "Is there an imminent danger to users where the legal escalation team should be involved?"
+                    self.state = State.MOD_CHECK_IMMINENT_DANGER
+                else:
+                    reply = "No action will be taken. Report completed."
+                    self.state = State.MOD_FINISH
+            return [reply]
+
+        if self.state == State.MOD_CHECK_IMMINENT_DANGER:
+            print("State is", self.state)
+
+            if message.content.lower() not in ["yes", "no"]:
+                reply = "Please respond in Yes or No."
+            else:
+                if message.content.lower() == "yes":
+                    reply = "Please write context to forward to the team. The initial flag will be included."
+                    self.state = State.MOD_SUBMIT_MESSAGE
+                else:
+                    category_1 = "1: Incites, promotes, or encourages acts of harm or violence."
+                    category_2 = "2: Dogwhistle that incites violence."
+                    category_3 = "3: Calls for war crimes or crimes against humanity."
+                    reply = "Please select the violated rule: \n" + \
+                        category_1 + "\n" + category_2 + "\n" + category_3
+                    self.state = State.MOD_SELECT_VIOLATION
+            return [reply]
+
+        if self.state == State.MOD_SUBMIT_MESSAGE:
+            print("State is", self.state)
+
+            reply = "Message submitted to team. Report completed."
+            self.state = State.MOD_FINISH
+            return [reply]
+
+        if self.state == State.MOD_SELECT_VIOLATION:
+            print("State is", self.state)
+
+            if message.content.lower() not in ["1", "2", "3"]:
+                reply = "Please respond in numbers."
+            else:
+                reply = "Please write an explanation for the reported user."
+                self.state = State.MOD_WRITE_EXPLANATION
+            return [reply]
+
+        if self.state == State.MOD_WRITE_EXPLANATION:
+            print("State is", self.state)
+
+            choice_1 = "1: Yes"
+            choice_2 = "2: No"
+            choice_3 = "3: Investigate More"
+            reply = "Post removed. Ban the reported user? \n" + \
+                choice_1 + "\n" + choice_2 + "\n" + choice_3
+            self.state = State.MOD_CHOOSE_BAN
+            return [reply]
+
+        if self.state == State.MOD_CHOOSE_BAN:
+            print("State is", self.state)
+
+            if message.content not in ["1", "2", "3"]:
+                reply = "Please select from the provided list with numbers."
+            else:
+                if message.content == "1":
+                    reply = "1: One week \n 2: Permanent"
+                    self.state = State.MOD_CHOOSE_BAN_DURATION
+                elif message.content == "2":
+                    ## LOGIC with JSON file to be determined ##
+                    reply = "To be implemented."
+                else:
+                    reply = "The user will not be banned. Report completed."
+                    self.state = State.MOD_FINISH
+            return [reply]
+
+        if self.state == State.MOD_CHOOSE_BAN_DURATION:
+            print("State is", self.state)
+
+            if message.content not in ["1", "2"]:
+                reply = "Please select from the provided list with numbers."
+            else:
+                if message.content == "1":
+                    reply = "Please add an explanation for the user as to why they're being temporarily banned."
+                    self.state = State.MOD_TEMP_BAN_EXPLANATION
+                else:
+                    reply = "Please add an explanation for the user as to why they're being permanently banned."
+                    self.state = State.MOD_PERMA_BAN_EXPLANATION
+            return [reply]
+
+        if self.state == State.MOD_TEMP_BAN_EXPLANATION:
+            print("State is", self.state)
+
+            reply = "The user has been banned for one week. Report completed."
+            self.state = State.MOD_FINISH
+            return [reply]
+
+        if self.state == State.MOD_PERMA_BAN_EXPLANATION:
+            print("State is", self.state)
+
+            reply = "The user has been banned permanently. Escalate report to another team?"
+            self.state = State.MOD_CHOOSE_ESCALATE
+            return [reply]
+
+        if self.state == State.MOD_CHOOSE_ESCALATE:
+            print("State is", self.state)
+
+            if message.content not in ["1", "2"]:
+                reply = "Please select from the provided list with numbers."
+            else:
+                if message.content == "1":
+                    reply = "The report has been escalated. Report completed."
+                else:
+                    reply = "Reported completed."
+                self.state = State.MOD_FINISH
+            return [reply]
 
     async def handle_message(self, message):
-        '''
-        This function makes up the meat of the user-side reporting flow. It defines how we transition between states and what 
-        prompts to offer at each of those states. You're welcome to change anything you want; this skeleton is just here to
-        get you started and give you a model for working with Discord. 
-        '''
-
         if message.content == self.CANCEL_KEYWORD:
             self.state = State.REPORT_COMPLETE
             return ["Report cancelled."]
@@ -69,29 +221,49 @@ class Report:
             category_1 = "1: Harassment"
             category_2 = "2: Spam"
             category_3 = "3: Violent Content"
+            category_4 = "4: Hate speech or offsneive content"
+            category_5 = "5: Bullying or personal attacks"
+            category_6 = "6: Ilegal activity"
+            category_7 = "7: False information"
+            category_8 = "8: It's Obscene"
             reply = "I found this message:" + "```" + message.author.name + ": " + message.content + "```" + \
-                "Please select what the message is in violation of:\n" + \
-                    category_1 + "\n" + category_2 + "\n" + category_3
+                "Please select what the message is in violation of:\n" + category_1 + "\n" + category_2 + "\n" + \
+                    category_3 + "\n" + category_4 + "\n" + category_5 + "\n" + category_6 + "\n" + category_7 + \
+                "\n" + category_8
+            self.reported_user = message.author.name
             self.state = State.SELECT_CATEGORY
             return [reply]
 
         if self.state == State.SELECT_CATEGORY:
             print("State is", self.state)
 
-            if message.content not in ["1", "2", "3"]:
+            if message.content not in ["1", "2", "3", "4", "5", "6", "7", "8"]:
                 reply = "Please select from the provided list with numbers."
             else:
-                if message.content == "1":
-                    reply = "You've selected Harassment"
-                elif message.content == "2":
-                    reply = "You've selected Spam"
+                if message.content != "3":
+                    general_message = "We’re sorry that you’ve experienced this content. Can you provide more context on your reasons for reporting this message?"
+                    if message.content == "1":
+                        reply = "You've selected Harassment. " + general_message
+                    elif message.content == "2":
+                        reply = "You've selected Spam. " + general_message
+                    elif message.content == "4":
+                        reply = "You've selected Hate speech or offensive content. " + general_message
+                    elif message.content == "5":
+                        reply = "You've selected Bullying or personal attacks. " + general_message
+                    elif message.content == "6":
+                        reply = "You've selected Illegal activity. " + general_message
+                    elif message.content == "7":
+                        reply = "You've selected False information. " + general_message
+                    else:
+                        reply = "You've selected It's obscene. " + general_message
+                    self.state = State.CHOOSE_PROVIDE_GENERAL_CONTEXT
                 else:
                     sub_category_1 = "1: Incitement to violence"
                     sub_category_2 = "2: Glorification of violence"
                     sub_category_3 = "3: Threat of harm to oneself or others"
                     reply = "Please tell us how which type of violent content you believe the message is in violation of from the following list: " + \
                             "\n" + sub_category_1 + "\n" + sub_category_2 + "\n" + sub_category_3
-                self.state = State.SELECT_SUB_CATEGORY
+                    self.state = State.SELECT_SUB_CATEGORY
             return [reply]
 
         if self.state == State.SELECT_SUB_CATEGORY:
@@ -100,16 +272,28 @@ class Report:
             if message.content not in ["1", "2", "3"]:
                 reply = "Please select from the provided list with numbers."
             else:
-                if message.content == "1":
-                    reply = "Would you like to tell us why you think the message is an incitement to violence?"
-                    self.state = State.CHOOSE_PROVIDE_CONTEXT
-                elif message.content == "2":
-                    reply = "Would you like to tell us why you think the message is a glorication of violence?"
+                if message.content == "1" or message.content == "2":
+                    reply = "We’re sorry that you’ve experienced this content. Can you provide more context on your reasons for reporting this message?"
                     self.state = State.CHOOSE_PROVIDE_CONTEXT
                 else:
                     reply = "If this is an emergency, please dial 911. Your report has been submitted to the moderation team for immediate action. Would you like to block this user?"
                     self.state = State.ASK_TO_BLOCK
             return [reply]
+
+        if self.state == State.CHOOSE_PROVIDE_GENERAL_CONTEXT:
+            print("State is", self.state)
+
+            if message.content.lower() not in ["yes", "no"]:
+                reply = "Please respond in Yes or No."
+            else:
+                if message.content.lower() == "yes":
+                    reply = "Please provide additional context about the abuse you are reporting."
+                    self.state = State.PROVIDE_CONTEXT
+                else:
+                    reply = "Your report has been sumbitted for review. Would you like to block this user?"
+                    self.state = State.ASK_TO_BLOCK
+            return [reply]
+
 
         if self.state == State.CHOOSE_PROVIDE_CONTEXT:
             print("State is", self.state)
@@ -118,7 +302,9 @@ class Report:
                 reply = "Please respond in Yes or No."
             else:
                 if message.content.lower() == "yes":
-                    reply = "Please give us any additional context to help our team better identify abuse."
+                    reply = "You’ve indicated this message is inciting violence. Please provide more context. As a reminder, we remove content under our Incitement to Violence guidelines if it:" + "\n" \
+                        + "-Incites, promotes, or encourages acts of harm or violence" + "\n" + "-Dogwhistles that indirectly incite violence" + "\n" + "-Calls for war crimes or crimes against humanity" \
+                            + "\n \n" + "If there is an immediate threat, please contact emergency services immediately."
                     self.state = State.PROVIDE_CONTEXT
                 else:
                     reply = "Your report has been sumbitted for review. Would you like to block this user?"
@@ -130,7 +316,8 @@ class Report:
             # Logic for storing context somewhere
 
             #
-            reply = "Thank you for providing additional context to our team. Your report has been sumbitted for review. Would you like to block this user?"
+            # TODO: Incorporate user id logic
+            reply = f"Thank you for reporting this message. The moderation team has been informed of your report and will review it as quickly as possible. Would you like to block [{self.reported_user}]?"
             self.state = State.ASK_TO_BLOCK
             return [reply]
 
@@ -140,7 +327,7 @@ class Report:
                 reply = "Please respond in yes or no."
             else:
                 if message.content.lower() == "yes":
-                    reply = "The user has been blocked. Thank you for keeping our community safe. Have a good day!"
+                    reply = f"{self.reported_user} has been blocked. Thank you for keeping our community safe. Have a good day!"
                     self.state = State.REPORT_COMPLETE
                 else:
                     reply = "Thank you for keeping our community safe. Have a good day!"
