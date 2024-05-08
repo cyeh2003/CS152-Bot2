@@ -45,14 +45,14 @@ def parse_list(input_list):
 
 class ModBot(discord.Client):
     def __init__(self):
-        report_time = datetime.now()
+        self.report_time = datetime.now()
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(command_prefix='.', intents=intents)
         self.group_num = None
         self.mod_channels = {}  # Map from guild to the mod channel id for that guild
         self.reports = {}  # Map from user IDs to the state of their report
-        self.report_summary = ["Report Summary " + f"({report_time}): \n"]
+        self.report_summary = ["Report Summary " + f"({self.report_time}): \n"]
         self.mod_channel = None
 
     async def on_ready(self):
@@ -110,6 +110,7 @@ class ModBot(discord.Client):
         # Only respond to messages if they're part of a reporting flow
         if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
             return
+
         # If we don't currently have an active report for this user, add one
         if author_id not in self.reports:
             self.reports[author_id] = Report(self)
@@ -131,8 +132,8 @@ class ModBot(discord.Client):
             # SEND TO MOD CHANNEL INSTEAD
             for c in self.report_summary:
                 await message.channel.send(c)
-                
-            
+
+            self.report_summary = ["Report Summary " + f"({self.report_time}): \n"]
             self.reports.pop(author_id)
 
     async def handle_channel_message(self, message):
