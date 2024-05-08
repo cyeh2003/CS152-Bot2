@@ -8,12 +8,15 @@ import re
 import requests
 from report import Report
 import pdb
+from datetime import datetime
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
 logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
-handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
+handler = logging.FileHandler(
+    filename='discord.log', encoding='utf-8', mode='w')
+handler.setFormatter(logging.Formatter(
+    '%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
 logger.addHandler(handler)
 
 # There should be a file called 'tokens.json' inside the same folder as this file
@@ -26,14 +29,31 @@ with open(token_path) as f:
     discord_token = tokens['discord']
 
 
+def parse_list(input_list):
+    # Join the characters into a single string
+    joined_string = ''.join(input_list)
+
+    # Split the string into a list of strings
+    string_list = joined_string.split(',')
+
+    # Remove any '[' or ']' characters from the strings
+    cleaned_list = [s.replace('[', '').replace(']', '')
+                    for s in string_list]
+
+    return cleaned_list
+
+
 class ModBot(discord.Client):
-    def __init__(self): 
+    def __init__(self):
+        report_time = datetime.now()
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(command_prefix='.', intents=intents)
         self.group_num = None
-        self.mod_channels = {} # Map from guild to the mod channel id for that guild
-        self.reports = {} # Map from user IDs to the state of their report
+        self.mod_channels = {}  # Map from guild to the mod channel id for that guild
+        self.reports = {}  # Map from user IDs to the state of their report
+        self.report_summary = ["Report Summary " + f"({report_time}): \n"]
+        self.mod_channel = None
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
@@ -46,21 +66,21 @@ class ModBot(discord.Client):
         if match:
             self.group_num = match.group(1)
         else:
-            raise Exception("Group number not found in bot's name. Name format should be \"Group # Bot\".")
+            raise Exception(
+                "Group number not found in bot's name. Name format should be \"Group # Bot\".")
 
         # Find the mod channel in each guild that this bot should report to
         for guild in self.guilds:
             for channel in guild.text_channels:
                 if channel.name == f'group-{self.group_num}-mod':
                     self.mod_channels[guild.id] = channel
-        
 
     async def on_message(self, message):
         '''
         This function is called whenever a message is sent in a channel that the bot can see (including DMs). 
         Currently the bot is configured to only handle messages that are sent over DMs or in your group's "group-#" channel. 
         '''
-        # Ignore messages from the bot 
+        # Ignore messages from the bot
         if message.author.id == self.user.id:
             return
 
@@ -73,29 +93,46 @@ class ModBot(discord.Client):
     async def handle_dm(self, message):
         # Handle a help message
         if message.content == Report.HELP_KEYWORD:
-            reply =  "Use the `report` command to begin the reporting process.\n"
+            reply = "Use the `report` command to begin the reporting process.\n"
             reply += "Use the `cancel` command to cancel the report process.\n"
             await message.channel.send(reply)
             return
-
         author_id = message.author.id
         responses = []
+
+        ################## Forwarding logic#######################
+        m = re.search('/(\d+)/(\d+)/(\d+)', message.content)
+        if m:
+            guild_id = int(m.group(1))
+            self.mod_channel = self.mod_channels[guild_id]
+        ########################################################
 
         # Only respond to messages if they're part of a reporting flow
         if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
             return
-
         # If we don't currently have an active report for this user, add one
         if author_id not in self.reports:
             self.reports[author_id] = Report(self)
+
+        self.report_summary += "User: " + message.content + "\n \n"
 
         # Let the report class handle this message; forward all the messages it returns to uss
         responses = await self.reports[author_id].handle_message(message)
         for r in responses:
             await message.channel.send(r)
 
+        self.report_summary += "Bot: " + str(responses) + "\n \n"
+
+        self.report_summary = parse_list(self.report_summary)
+
         # If the report is complete or cancelled, remove it from our map
         if self.reports[author_id].report_complete():
+            self.report_summary = [self.report_summary[0].replace('\\n', '\n')]
+            # SEND TO MOD CHANNEL INSTEAD
+            for c in self.report_summary:
+                await message.channel.send(c)
+                
+            
             self.reports.pop(author_id)
 
     async def handle_channel_message(self, message):
@@ -105,11 +142,10 @@ class ModBot(discord.Client):
 
         # Forward the message to the mod channel
         mod_channel = self.mod_channels[message.guild.id]
-        await mod_channel.send(f'Forwarded message:\n{message.author.name}: "{message.content}"')
-        scores = self.eval_text(message.content)
-        await mod_channel.send(self.code_format(scores))
+        await mod_channel.send(message)
+        # scores = self.eval_text(message.content)
+        # await mod_channel.send(self.code_format(scores))
 
-    
     def eval_text(self, message):
         ''''
         TODO: Once you know how you want to evaluate messages in your channel, 
@@ -117,14 +153,13 @@ class ModBot(discord.Client):
         '''
         return message
 
-    
     def code_format(self, text):
         ''''
         TODO: Once you know how you want to show that a message has been 
         evaluated, insert your code here for formatting the string to be 
         shown in the mod channel. 
         '''
-        return "Evaluated: '" + text+ "'"
+        return "Evaluated: '" + text + "'"
 
 
 client = ModBot()
