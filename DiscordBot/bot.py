@@ -54,6 +54,8 @@ class ModBot(discord.Client):
         self.reports = {}  # Map from user IDs to the state of their report
         self.report_summary = ["Report Summary " + f"({self.report_time}): \n"]
         self.mod_channel = None
+        self.author_id = None
+        self.mod_flag = False
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
@@ -90,6 +92,18 @@ class ModBot(discord.Client):
         else:
             await self.handle_dm(message)
 
+        if self.mod_flag:
+            await self.handle_mod_channel(message)
+
+    async def handle_mod_channel(self, message):
+
+        responses = await self.reports[self.author_id].handle_mod_message(message)
+        for r in responses:
+            await self.mod_channel.send(r)
+
+        if self.reports[self.author_id].mod_flow_complete():
+            self.reports.pop(self.author_id)
+
     async def handle_dm(self, message):
         # Handle a help message
         if message.content == Report.HELP_KEYWORD:
@@ -98,14 +112,14 @@ class ModBot(discord.Client):
             await message.channel.send(reply)
             return
         author_id = message.author.id
+        self.author_id = author_id
         responses = []
 
-        ################## Forwarding logic#######################
+        # Forwarding logic
         m = re.search('/(\d+)/(\d+)/(\d+)', message.content)
         if m:
             guild_id = int(m.group(1))
             self.mod_channel = self.mod_channels[guild_id]
-        ########################################################
 
         # Only respond to messages if they're part of a reporting flow
         if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
@@ -123,7 +137,6 @@ class ModBot(discord.Client):
             await message.channel.send(r)
 
         self.report_summary += "Bot: " + str(responses) + "\n \n"
-
         self.report_summary = parse_list(self.report_summary)
 
         # If the report is complete or cancelled, remove it from our map
@@ -131,9 +144,13 @@ class ModBot(discord.Client):
             self.report_summary = [self.report_summary[0].replace('\\n', '\n')]
             # SEND TO MOD CHANNEL INSTEAD
             for c in self.report_summary:
-                await message.channel.send(c)
+                await self.mod_channel.send(c)
+            self.mod_flag = True
 
-            self.report_summary = ["Report Summary " + f"({self.report_time}): \n"]
+            self.report_summary = [
+                "Report Summary " + f"({self.report_time}): \n"]
+        
+        if self.reports[author_id].mod_flow_complete():
             self.reports.pop(author_id)
 
     async def handle_channel_message(self, message):
