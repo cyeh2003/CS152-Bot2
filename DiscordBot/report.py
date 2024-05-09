@@ -18,7 +18,6 @@ class State(Enum):
     ASK_TO_BLOCK = auto()
     REPORT_COMPLETE = auto()
 
-    MOD_FLOW_START = auto()
     MOD_DECIDE_INCITEMENT = auto()
     MOD_CHECK_IMMINENT_DANGER = auto()
     MOD_SUBMIT_MESSAGE = auto()
@@ -54,7 +53,6 @@ class Report:
     CANCEL_KEYWORD = "cancel"
     HELP_KEYWORD = "help"
 
-
     def __init__(self, client):
         self.state = State.REPORT_START
         self.client = client
@@ -62,7 +60,7 @@ class Report:
         self.reported_user = None
 
     async def handle_mod_message(self, message):
-        
+
         # Load global report history
         history_path = 'history.json'
         history = None
@@ -70,13 +68,11 @@ class Report:
             raise Exception(f"{history_path} not found!")
         with open(history_path) as f:
             history = json.load(f)
-            
-        self.state = State.MOD_FLOW_START
 
-        if self.state == State.MOD_FLOW_START:
+        if self.state == State.REPORT_COMPLETE:
             print("State is", self.state)
 
-            reply = "Based on the report summary, is this report related to incitement of violence?"
+            reply = "\n \nBased on the report summary, is this report related to incitement of violence?"
             self.state = State.MOD_DECIDE_INCITEMENT
             return [reply]
 
@@ -88,10 +84,10 @@ class Report:
             else:
                 if message.content.lower() == "yes":
                     reply = "Based on the report summary above, do you find that this content violates our incitement to violence policy?"
-                    State.MOD_DECIDE_INCITEMENT_ABUSE
+                    self.state = State.MOD_DECIDE_INCITEMENT_ABUSE
                 else:
                     reply = "No action will be taken. Report completed."
-                    State.MOD_FINISH
+                    self.state = State.MOD_FINISH
             return [reply]
 
         if self.state == State.MOD_DECIDE_INCITEMENT_ABUSE:
@@ -102,17 +98,17 @@ class Report:
             else:
                 if message.content.lower() == "yes":
                     reply = "Is there an imminent danger to users where the legal escalation team should be involved?"
-                    
+
                     # Increment user report history: violation_count
                     if self.reported_user not in history:
-                        history[self.reported_user] = Reported_User(1, 0, 0, 0)
+                        history[self.reported_user] = Reported_User(1, 0, 1, 0)
                     else:
                         history[self.reported_user]['violation_count'] += 1
 
                     # Save it back to json file
                     with open(history_path, 'w') as file:
                         json.dump(history, file, cls=CustomEncoder)
-                        
+
                     self.state = State.MOD_CHECK_IMMINENT_DANGER
                 else:
                     reply = "No action will be taken. Report completed."
@@ -181,9 +177,9 @@ class Report:
                     violation_count = history[user]['violation_count']
                     blocked_count = history[user]['blocked_count']
                     reply = f"The user {user} has been:\n" + f"Reported {reported_count} times\n" + \
-                        f"Violated policy {violation_count} times\n" + f"Blocked {blocked_count}\n" + \
+                        f"Violated policy {violation_count} times\n" + f"Blocked {blocked_count} times\n" + \
                             f"Banned {banned_count} times\n \n" + "What would you like to do?\n" + \
-                                "1: Ban user\n" + "2: Escalate Report\n" + "3: Do not ban user\n"  
+                        "1: Ban user\n" + "2: Escalate Report\n" + "3: Do not ban user\n"
                     self.state = State.MOD_INVESTIGATE
                 else:
                     reply = f"{self.reported_user} will not be banned. Report completed."
@@ -192,25 +188,34 @@ class Report:
 
         if self.state == State.MOD_INVESTIGATE:
             print("State is", self.state)
-
+            
             if message.content not in ["1", "2", "3"]:
                 reply = "Please select from the provided list with numbers."
             else:
                 if message.content == "1":
                     self.state = State.MOD_CHOOSE_BAN_DURATION
-                    reply = "1: One week \n 2: Permanent"
+                    reply = "1: One week \n2: Permanent"
                 elif message.content == "2":
                     self.state = State.MOD_CHOOSE_ESCALATE
                     reply = "Confirm escalation?"
                 else:
                     self.state = State.MOD_FINISH
                     reply = f"{self.reported_user} will not be banned. Report completed"
-                
-                return [reply]
 
+                return [reply]
 
         if self.state == State.MOD_CHOOSE_BAN_DURATION:
             print("State is", self.state)
+            
+            # Increment user report history: banned_count
+            if self.reported_user not in history:
+                history[self.reported_user] = Reported_User(1, 1, 1, 0)
+            else:
+                history[self.reported_user]['banned_count'] += 1
+
+            # Save it back to json file
+            with open(history_path, 'w') as file:
+                json.dump(history, file, cls=CustomEncoder)
 
             if message.content not in ["1", "2"]:
                 reply = "Please select from the provided list with numbers."
@@ -258,9 +263,11 @@ class Report:
         with open(history_path) as f:
             history = json.load(f)
 
+
         if message.content == self.CANCEL_KEYWORD:
             self.state = State.REPORT_COMPLETE
             return ["Report cancelled."]
+
 
         if self.state == State.REPORT_START:
             reply = "Thank you for starting the reporting process. "
@@ -269,6 +276,7 @@ class Report:
             reply += "You can obtain this link by right-clicking the message and clicking `Copy Message Link`."
             self.state = State.AWAITING_MESSAGE
             return [reply]
+
 
         if self.state == State.AWAITING_MESSAGE:
             # Parse out the three ID strings from the message link
@@ -288,6 +296,7 @@ class Report:
 
             self.state = State.MESSAGE_IDENTIFIED
 
+
         if self.state == State.MESSAGE_IDENTIFIED:
             print("State is", self.state)
             category_1 = "1: Harassment"
@@ -305,6 +314,7 @@ class Report:
             self.reported_user = message.author.name
             self.state = State.SELECT_CATEGORY
             return [reply]
+
 
         if self.state == State.SELECT_CATEGORY:
             print("State is", self.state)
@@ -349,6 +359,7 @@ class Report:
 
             return [reply]
 
+
         if self.state == State.SELECT_SUB_CATEGORY:
             print("State is", self.state)
 
@@ -362,6 +373,7 @@ class Report:
                     reply = "If this is an emergency, please dial 911. Your report has been submitted to the moderation team for immediate action. Would you like to block this user?"
                     self.state = State.ASK_TO_BLOCK
             return [reply]
+
 
         if self.state == State.CHOOSE_PROVIDE_GENERAL_CONTEXT:
             print("State is", self.state)
@@ -394,11 +406,13 @@ class Report:
                     self.state = State.ASK_TO_BLOCK
             return [reply]
 
+
         if self.state == State.PROVIDE_CONTEXT:
             print("State is", self.state)
             reply = f"Thank you for reporting this message. The moderation team has been informed of your report and will review it as quickly as possible. Would you like to block [{self.reported_user}]?"
             self.state = State.ASK_TO_BLOCK
             return [reply]
+
 
         if self.state == State.ASK_TO_BLOCK:
             print("State is", self.state)
@@ -409,7 +423,7 @@ class Report:
                     reply = f"{self.reported_user} has been blocked. Thank you for keeping our community safe. Have a good day!"
                     # Increment user report history: blocked_count
                     if self.reported_user not in history:
-                        history[self.reported_user] = Reported_User(1, 0, 0, 0)
+                        history[self.reported_user] = Reported_User(1, 0, 0, 1)
                     else:
                         history[self.reported_user]['blocked_count'] += 1
 
@@ -425,3 +439,6 @@ class Report:
 
     def report_complete(self):
         return self.state == State.REPORT_COMPLETE
+
+    def mod_flow_complete(self):
+        return self.state == State.MOD_FINISH
