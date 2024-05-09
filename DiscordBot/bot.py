@@ -102,6 +102,7 @@ class ModBot(discord.Client):
             await self.mod_channel.send(r)
 
         if self.reports[self.author_id].mod_flow_complete():
+            self.mod_flag = False
             self.reports.pop(self.author_id)
 
     async def handle_dm(self, message):
@@ -149,9 +150,6 @@ class ModBot(discord.Client):
 
             self.report_summary = [
                 "Report Summary " + f"({self.report_time}): \n"]
-        
-        if self.reports[author_id].mod_flow_complete():
-            self.reports.pop(author_id)
 
     async def handle_channel_message(self, message):
         # Only handle messages sent in the "group-#" channel
