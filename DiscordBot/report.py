@@ -19,7 +19,10 @@ class State(Enum):
     REPORT_COMPLETE = auto()
 
     MOD_DECIDE_INCITEMENT = auto()
+    MOD_DECIDE_GENERAL_ABUSE = auto()
     MOD_CHECK_IMMINENT_DANGER = auto()
+    MOD_CHECK_IMMINENT_DANGER_GENERAL = auto()
+    MOD_CHOOSE_GENERAL_ABUSE = auto()
     MOD_SUBMIT_MESSAGE = auto()
     MOD_SELECT_VIOLATION = auto()
     MOD_WRITE_EXPLANATION = auto()
@@ -72,7 +75,8 @@ class Report:
         if self.state == State.REPORT_COMPLETE:
             print("State is", self.state)
 
-            reply = "\n \nBased on the report summary, is this report related to incitement of violence?"
+            reply = "\n \n" + \
+                "Based on the report summary, is this report related to incitement of violence?"
             self.state = State.MOD_DECIDE_INCITEMENT
             return [reply]
 
@@ -86,8 +90,81 @@ class Report:
                     reply = "Based on the report summary above, do you find that this content violates our incitement to violence policy?"
                     self.state = State.MOD_DECIDE_INCITEMENT_ABUSE
                 else:
-                    reply = "No action will be taken. Report completed."
+                    reply = "Based on the report summary above, do you find that this content violates its category policy?"
+                    self.state = State.MOD_DECIDE_GENERAL_ABUSE
+            return [reply]
+
+        if self.state == State.MOD_DECIDE_GENERAL_ABUSE:
+            print("State is", self.state)
+
+            if message.content.lower() not in ["yes", "no"]:
+                reply = "Please respond in Yes or No."
+            else:
+                if message.content.lower() == "yes":
+                    reply = "Is there an imminent danger to users where the legal escalation team should be involved?"
+
+                    # Increment user report history: violation_count
+                    if self.reported_user not in history:
+                        history[self.reported_user] = Reported_User(1, 0, 1, 0)
+                    else:
+                        history[self.reported_user]['violation_count'] += 1
+
+                    # Save it back to json file
+                    with open(history_path, 'w') as file:
+                        json.dump(history, file, cls=CustomEncoder)
+
+                    self.state = State.MOD_CHECK_IMMINENT_DANGER_GENERAL
+
+                else:
+                    reply = "No action will be taken. Report complete."
                     self.state = State.MOD_FINISH
+
+            return [reply]
+
+        if self.state == State.MOD_CHECK_IMMINENT_DANGER_GENERAL:
+            print("State is", self.state)
+
+            if message.content.lower() not in ["yes", "no"]:
+                reply = "Please respond in Yes or No."
+            else:
+                if message.content.lower() == "yes":
+                    reply = "Please write context to forward to the team. The initial flag will be included."
+                    self.state = State.MOD_SUBMIT_MESSAGE
+                else:
+                    category_1 = "1: Harassment"
+                    category_2 = "2: Spam"
+                    category_3 = "3: Violent Content"
+                    category_4 = "4: Hate speech or offsneive content"
+                    category_5 = "5: Bullying or personal attacks"
+                    category_6 = "6: Ilegal activity"
+                    category_7 = "7: False information"
+                    category_8 = "8: It's Obscene"
+                    reply = "Please select the violated rule of the reported message:\n" + category_1 + "\n" + category_2 + "\n" + \
+                            category_3 + "\n" + category_4 + "\n" + category_5 + "\n" + category_6 + "\n" + category_7 + \
+                        "\n" + category_8
+                    self.state = State.MOD_CHOOSE_GENERAL_ABUSE
+
+            return [reply]
+
+        if self.state == State.MOD_CHOOSE_GENERAL_ABUSE:
+            print("State is", self.state)
+
+            if message.content.lower() not in ["1", "2", "3", "4", "5", "6", "7", "8"]:
+                reply = "Please respond with a number"
+            else:
+                # Increment user report history: violation_count
+                if self.reported_user not in history:
+                    history[self.reported_user] = Reported_User(1, 0, 1, 0)
+                else:
+                    history[self.reported_user]['violation_count'] += 1
+
+                # Save it back to json file
+                with open(history_path, 'w') as file:
+                    json.dump(history, file, cls=CustomEncoder)
+
+                reply = "Please write an explanation for the reported user."
+                self.state = State.MOD_WRITE_EXPLANATION
+
             return [reply]
 
         if self.state == State.MOD_DECIDE_INCITEMENT_ABUSE:
@@ -113,6 +190,7 @@ class Report:
                 else:
                     reply = "No action will be taken. Report completed."
                     self.state = State.MOD_FINISH
+
             return [reply]
 
         if self.state == State.MOD_CHECK_IMMINENT_DANGER:
@@ -131,6 +209,7 @@ class Report:
                     reply = "Please select the violated rule: \n" + \
                         category_1 + "\n" + category_2 + "\n" + category_3
                     self.state = State.MOD_SELECT_VIOLATION
+
             return [reply]
 
         if self.state == State.MOD_SUBMIT_MESSAGE:
@@ -148,6 +227,7 @@ class Report:
             else:
                 reply = "Please write an explanation for the reported user."
                 self.state = State.MOD_WRITE_EXPLANATION
+
             return [reply]
 
         if self.state == State.MOD_WRITE_EXPLANATION:
@@ -159,6 +239,7 @@ class Report:
             reply = "Post removed. Ban the reported user? \n" + \
                 choice_1 + "\n" + choice_2 + "\n" + choice_3
             self.state = State.MOD_CHOOSE_BAN
+
             return [reply]
 
         if self.state == State.MOD_CHOOSE_BAN:
@@ -168,7 +249,7 @@ class Report:
                 reply = "Please select from the provided list with numbers."
             else:
                 if message.content == "1":
-                    reply = "1: One week \n 2: Permanent"
+                    reply = "1: One week\n2: Permanent"
                     self.state = State.MOD_CHOOSE_BAN_DURATION
                 elif message.content == "2":
                     user = self.reported_user
@@ -184,17 +265,18 @@ class Report:
                 else:
                     reply = f"{self.reported_user} will not be banned. Report completed."
                     self.state = State.MOD_FINISH
+
             return [reply]
 
         if self.state == State.MOD_INVESTIGATE:
             print("State is", self.state)
-            
+
             if message.content not in ["1", "2", "3"]:
                 reply = "Please select from the provided list with numbers."
             else:
                 if message.content == "1":
                     self.state = State.MOD_CHOOSE_BAN_DURATION
-                    reply = "1: One week \n2: Permanent"
+                    reply = "1: One week\n2: Permanent"
                 elif message.content == "2":
                     self.state = State.MOD_CHOOSE_ESCALATE
                     reply = "Confirm escalation?"
@@ -206,7 +288,7 @@ class Report:
 
         if self.state == State.MOD_CHOOSE_BAN_DURATION:
             print("State is", self.state)
-            
+
             # Increment user report history: banned_count
             if self.reported_user not in history:
                 history[self.reported_user] = Reported_User(1, 1, 1, 0)
@@ -226,6 +308,7 @@ class Report:
                 else:
                     reply = "Please add an explanation for the user as to why they're being permanently banned."
                     self.state = State.MOD_PERMA_BAN_EXPLANATION
+
             return [reply]
 
         if self.state == State.MOD_TEMP_BAN_EXPLANATION:
@@ -233,6 +316,7 @@ class Report:
 
             reply = f"{self.reported_user} has been banned for one week. Report completed."
             self.state = State.MOD_FINISH
+
             return [reply]
 
         if self.state == State.MOD_PERMA_BAN_EXPLANATION:
@@ -240,19 +324,21 @@ class Report:
 
             reply = f"{self.reported_user} has been banned permanently. Escalate report to another team?"
             self.state = State.MOD_CHOOSE_ESCALATE
+
             return [reply]
 
         if self.state == State.MOD_CHOOSE_ESCALATE:
             print("State is", self.state)
 
-            if message.content not in ["1", "2"]:
-                reply = "Please select from the provided list with numbers."
+            if message.content.lower() not in ["yes", "no"]:
+                reply = "Please respond with yes or no."
             else:
-                if message.content == "1":
+                if message.content.lower() == "yes":
                     reply = "The report has been escalated. Report completed."
                 else:
                     reply = "Reported completed."
                 self.state = State.MOD_FINISH
+
             return [reply]
 
     async def handle_message(self, message):
@@ -262,7 +348,6 @@ class Report:
             raise Exception(f"{history_path} not found!")
         with open(history_path) as f:
             history = json.load(f)
-
 
         if message.content == self.CANCEL_KEYWORD:
             self.state = State.REPORT_COMPLETE
@@ -275,6 +360,7 @@ class Report:
             reply += "Please copy paste the link to the message you want to report.\n"
             reply += "You can obtain this link by right-clicking the message and clicking `Copy Message Link`."
             self.state = State.AWAITING_MESSAGE
+
             return [reply]
 
 
@@ -313,6 +399,7 @@ class Report:
                 "\n" + category_8
             self.reported_user = message.author.name
             self.state = State.SELECT_CATEGORY
+
             return [reply]
 
 
@@ -359,7 +446,6 @@ class Report:
 
             return [reply]
 
-
         if self.state == State.SELECT_SUB_CATEGORY:
             print("State is", self.state)
 
@@ -370,10 +456,10 @@ class Report:
                     reply = "We’re sorry that you’ve experienced this content. Can you provide more context on your reasons for reporting this message?"
                     self.state = State.CHOOSE_PROVIDE_CONTEXT
                 else:
-                    reply = "If this is an emergency, please dial 911. Your report has been submitted to the moderation team for immediate action. Would you like to block this user?"
+                    reply = f"If this is an emergency, please dial 911. Your report has been submitted to the moderation team for immediate action. Would you like to block [{self.reported_user}]?"
                     self.state = State.ASK_TO_BLOCK
-            return [reply]
 
+            return [reply]
 
         if self.state == State.CHOOSE_PROVIDE_GENERAL_CONTEXT:
             print("State is", self.state)
@@ -385,10 +471,10 @@ class Report:
                     reply = "Please provide additional context about the abuse you are reporting."
                     self.state = State.PROVIDE_CONTEXT
                 else:
-                    reply = "Your report has been sumbitted for review. Would you like to block this user?"
+                    reply = f"Thank you for reporting this message. The moderation team has been informed of your report and will review it as quickly as possible. Would you like to block [{self.reported_user}]?"
                     self.state = State.ASK_TO_BLOCK
-            return [reply]
 
+            return [reply]
 
         if self.state == State.CHOOSE_PROVIDE_CONTEXT:
             print("State is", self.state)
@@ -402,17 +488,17 @@ class Report:
                             + "\n \n" + "If there is an immediate threat, please contact emergency services immediately."
                     self.state = State.PROVIDE_CONTEXT
                 else:
-                    reply = "Your report has been sumbitted for review. Would you like to block this user?"
+                    reply = f"Your report has been sumbitted for review. Would you like to block [{self.reported_user}]?"
                     self.state = State.ASK_TO_BLOCK
-            return [reply]
 
+            return [reply]
 
         if self.state == State.PROVIDE_CONTEXT:
             print("State is", self.state)
             reply = f"Thank you for reporting this message. The moderation team has been informed of your report and will review it as quickly as possible. Would you like to block [{self.reported_user}]?"
             self.state = State.ASK_TO_BLOCK
-            return [reply]
 
+            return [reply]
 
         if self.state == State.ASK_TO_BLOCK:
             print("State is", self.state)
@@ -435,6 +521,7 @@ class Report:
                 else:
                     reply = "Thank you for keeping our community safe. Have a good day!"
                     self.state = State.REPORT_COMPLETE
+
             return [reply]
 
     def report_complete(self):
