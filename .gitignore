@@ -1,3 +1,4 @@
 *.log
 DiscordBot/tokens.json
 TABot/tokens.json
+DiscordBot/Python-3.10.8

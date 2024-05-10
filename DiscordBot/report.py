@@ -336,7 +336,7 @@ class Report:
                 if message.content.lower() == "yes":
                     reply = "The report has been escalated. Report completed."
                 else:
-                    reply = "Reported completed."
+                    reply = "Report completed."
                 self.state = State.MOD_FINISH
 
             return [reply]
