@@ -134,7 +134,7 @@ class Report:
                     category_1 = "1: Harassment"
                     category_2 = "2: Spam"
                     category_3 = "3: Violent Content"
-                    category_4 = "4: Hate speech or offsneive content"
+                    category_4 = "4: Hate speech or offensive content"
                     category_5 = "5: Bullying or personal attacks"
                     category_6 = "6: Ilegal activity"
                     category_7 = "7: False information"
