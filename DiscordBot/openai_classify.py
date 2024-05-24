@@ -46,4 +46,4 @@ for index, row in data.iterrows():
         num_correct += 1
 data['classification'] = classifications
 data.to_csv('dataset_openai_classified.csv', index=False)
-print(f"Accuracy: {num_correct/total_messages}")
+print(f"Accuracy: {num_correct*100/total_messages}%")
