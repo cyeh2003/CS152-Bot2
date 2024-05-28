@@ -9,6 +9,7 @@ import requests
 from report import Report
 import pdb
 from datetime import datetime
+import openai_classify as openai
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -96,6 +97,8 @@ class ModBot(discord.Client):
             await self.handle_mod_channel(message)
 
     async def handle_mod_channel(self, message):
+        print(self.reports[self.author_id].message)
+        print(self.reports[self.author_id].reported_user)
 
         responses = await self.reports[self.author_id].handle_mod_message(message)
         for r in responses:
@@ -137,7 +140,7 @@ class ModBot(discord.Client):
         for r in responses:
             await message.channel.send(r)
 
-        self.report_summary += "Bot: " + str(responses) + "\n \n"
+        # self.report_summary += "Bot: " + str(responses) + "\n \n"
         self.report_summary = parse_list(self.report_summary)
 
         # If the report is complete or cancelled, remove it from our map
@@ -158,24 +161,27 @@ class ModBot(discord.Client):
 
         # Forward the message to the mod channel
         mod_channel = self.mod_channels[message.guild.id]
-        await mod_channel.send(message)
-        # scores = self.eval_text(message.content)
-        # await mod_channel.send(self.code_format(scores))
+        self.mod_channel = mod_channel
+        incitement_flag = self.eval_text(message.content)
+        print(incitement_flag)
+
+        if incitement_flag:
+            author_id = message.author.id
+            self.author_id = author_id
+
+            if author_id not in self.reports:
+                self.reports[author_id] = Report(self)
+
+            await mod_channel.send(self.code_format(message))
+            self.mod_flag = True
 
     def eval_text(self, message):
-        ''''
-        TODO: Once you know how you want to evaluate messages in your channel, 
-        insert your code here! This will primarily be used in Milestone 3. 
-        '''
-        return message
+        return openai.classifyMessage(message)
 
-    def code_format(self, text):
-        ''''
-        TODO: Once you know how you want to show that a message has been 
-        evaluated, insert your code here for formatting the string to be 
-        shown in the mod channel. 
-        '''
-        return "Evaluated: '" + text + "'"
+    def code_format(self, message):
+        result = "The message  by" + "```" + message.author.name + ": " + message.content + "```" + "was evaluated to be in violation of" + \
+            "content policy against incitement of violence speech."
+        return result
 
 
 client = ModBot()

@@ -63,7 +63,11 @@ class Report:
         self.reported_user = None
 
     async def handle_mod_message(self, message):
-
+        if self.state == State.REPORT_START: 
+            self.message = message.content
+            self.reported_user = message.author.name
+            self.state = State.REPORT_COMPLETE
+        
         # Load global report history
         history_path = 'history.json'
         history = None
@@ -134,7 +138,7 @@ class Report:
                     category_1 = "1: Harassment"
                     category_2 = "2: Spam"
                     category_3 = "3: Violent Content"
-                    category_4 = "4: Hate speech or offensive content"
+                    category_4 = "4: Hate speech or offsneive content"
                     category_5 = "5: Bullying or personal attacks"
                     category_6 = "6: Ilegal activity"
                     category_7 = "7: False information"
@@ -214,8 +218,14 @@ class Report:
 
         if self.state == State.MOD_SUBMIT_MESSAGE:
             print("State is", self.state)
+            
+            # Increment user report history: banned_count
+            if self.reported_user not in history:
+                history[self.reported_user] = Reported_User(1, 1, 1, 0)
+            else:
+                history[self.reported_user]['banned_count'] += 1
 
-            reply = "Message submitted to team. Report completed."
+            reply = "Message submitted to team. Report completed. The user has been banned."
             self.state = State.MOD_FINISH
             return [reply]
 
@@ -336,7 +346,7 @@ class Report:
                 if message.content.lower() == "yes":
                     reply = "The report has been escalated. Report completed."
                 else:
-                    reply = "Report completed."
+                    reply = "Reported completed."
                 self.state = State.MOD_FINISH
 
             return [reply]
