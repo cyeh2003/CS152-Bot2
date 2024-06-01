@@ -90,34 +90,36 @@ class ModBot(discord.Client):
         This function is called whenever a message is sent in a channel that the bot can see (including DMs). 
         Currently the bot is configured to only handle messages that are sent over DMs or in your group's "group-#" channel. 
         '''
+        
         # Ignore messages from the bot
         if message.author.id == self.user.id:
             return
         
         # Check if this message was sent in a server ("guild") or if it's a DM
         if message.guild:
-            await self.handle_channel_message(message)
+            if message.channel.name == 'group-3':
+                await self.handle_channel_message(message)
+            else:
+                if self.count > 0:
+                    # Handle initial starting state
+                    if message.content == "start":
+                        # Using GPT-4o, determine the next most important report to handle
+                        self.current_report_key = self.get_next_key()
+                        self.mod_in_progress = True
+                        # Forward report summary to mod channel
+                        for r in self.reports[self.current_report_key][2]:
+                            await self.mod_channel.send(r)
+                        
+                        # Manually ask this question in the mod channel
+                        reply = "\n \n" + "Based on the report summary, is this report related to incitement of violence?"
+                        for r in [reply]:
+                            await self.mod_channel.send(r)
+                    # Report already started on the moderator end, call handle_mod_channel()  
+                    elif self.mod_in_progress and message.content != "start":
+                        await self.handle_mod_channel(message)
         else:
             await self.handle_dm(message)
 
-        if self.count > 0:
-            # Handle initial starting state
-            if message.content == "start":
-                # Using GPT-4o, determine the next most important report to handle
-                self.current_report_key = self.get_next_key()
-                self.mod_in_progress = True
-                # Forward report summary to mod channel
-                for r in self.reports[self.current_report_key][2]:
-                    await self.mod_channel.send(r)
-                
-                # Manually ask this question in the mod channel
-                reply = "\n \n" + "Based on the report summary, is this report related to incitement of violence?"
-                for r in [reply]:
-                    await self.mod_channel.send(r)
-            # Report already started on the moderator end, call handle_mod_channel()  
-            elif self.mod_in_progress and message.content != "start":
-                await self.handle_mod_channel(message)
-    
     
     # This grabs all reported messages from self.reports, puts them into a list and asks GPT-4o to return the most
     # urgent one that needs to be reviewed. Returns the key to the report
@@ -218,6 +220,9 @@ class ModBot(discord.Client):
         # Only handle messages sent in the "group-#" channel
         if not message.channel.name == f'group-{self.group_num}':
             return
+
+        mod_channel = self.mod_channels[message.guild.id]
+        self.mod_channel = mod_channel
 
         incitement_flag = self.eval_text(message.content)
 
