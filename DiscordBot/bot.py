@@ -10,6 +10,7 @@ from report import Report
 import pdb
 from datetime import datetime
 import openai_classify as openai
+import hashlib
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -28,6 +29,14 @@ with open(token_path) as f:
     # If you get an error here, it means your token is formatted incorrectly. Did you put it in quotes?
     tokens = json.load(f)
     discord_token = tokens['discord']
+
+
+def hash(a, b):
+    joined = a + b
+    hash_object = hashlib.sha256()
+    hash_object.update(joined.encode('utf-8'))
+
+    return hash_object.hexdigest()
 
 
 def parse_list(input_list):
@@ -56,7 +65,12 @@ class ModBot(discord.Client):
         self.report_summary = ["Report Summary " + f"({self.report_time}): \n"]
         self.mod_channel = None
         self.author_id = None
-        self.mod_flag = False
+        self.report_identified = False
+        self.reported_message = None
+        self.current_report_key = None
+        self.count = 0
+        self.mod_in_progress = False
+        self.author_name = None
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
@@ -93,20 +107,50 @@ class ModBot(discord.Client):
         else:
             await self.handle_dm(message)
 
-        if self.mod_flag:
-            await self.handle_mod_channel(message)
+        if self.count > 0:
+            if message.content == "start":
+                self.current_report_key = self.get_next_key()
+                self.mod_in_progress = True
+                # send report summary to mod channel, how current_report_key is determined is TODO
+                for r in self.reports[self.current_report_key][2]:
+                    await self.mod_channel.send(r)
+                print("hit here")
+                reply = "\n \n" + "Based on the report summary, is this report related to incitement of violence?"
+                for r in [reply]:
+                    await self.mod_channel.send(r)
+            elif self.mod_in_progress and message.content != "start":
+                await self.handle_mod_channel(message)
+    
+    def get_next_key(self):
+        reported_messages = []
+        for key in self.reports:
+            # append message to reported_message list
+            print(self.reports[key])
+            reported_messages.append(self.reports[key][1])
+            
+        top_priority = openai.rank_priority(reported_messages)
+        
+        for key in self.reports:
+            if top_priority == self.reports[key][1]:    
+                return key
+             
 
     async def handle_mod_channel(self, message):
-        print(self.reports[self.author_id].message)
-        print(self.reports[self.author_id].reported_user)
+        print("hit handle mod channel")
+        responses = await self.reports[self.current_report_key][0].handle_mod_message(message, self.author_name)
+        print(self.reports[self.current_report_key][0])
+        if responses:
+            for r in responses:
+                await self.mod_channel.send(r)
+        else:
+            return
 
-        responses = await self.reports[self.author_id].handle_mod_message(message)
-        for r in responses:
-            await self.mod_channel.send(r)
-
-        if self.reports[self.author_id].mod_flow_complete():
-            self.mod_flag = False
-            self.reports.pop(self.author_id)
+        if self.reports[self.current_report_key][0].mod_flow_complete():
+            self.mod_in_progress = False
+            self.count -= 1
+            for r in [f"There are {self.count} reports to be reviewed."]:
+                await self.mod_channel.send(r)
+            self.reports.pop(self.current_report_key)
 
     async def handle_dm(self, message):
         # Handle a help message
@@ -115,44 +159,68 @@ class ModBot(discord.Client):
             reply += "Use the `cancel` command to cancel the report process.\n"
             await message.channel.send(reply)
             return
-        author_id = message.author.id
-        self.author_id = author_id
+
         responses = []
 
         # Forwarding logic
         m = re.search('/(\d+)/(\d+)/(\d+)', message.content)
         if m:
             guild_id = int(m.group(1))
+            guild = discord.Client.get_guild(self, int(m.group(1)))
+            channel = guild.get_channel(int(m.group(2)))
             self.mod_channel = self.mod_channels[guild_id]
+            reported_message = await channel.fetch_message(int(m.group(3)))
+            self.author_id = reported_message.author.id
+            self.report_identified = True
+            self.reported_message = reported_message.content
+            self.current_report_key = hash(str(self.author_id), self.reported_message)
+            print(self.current_report_key)
 
         # Only respond to messages if they're part of a reporting flow
-        if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
+        if self.current_report_key not in self.reports and not message.content.startswith(Report.START_KEYWORD) and not self.report_identified:
+            print("we hit break")
             return
 
-        # If we don't currently have an active report for this user, add one
-        if author_id not in self.reports:
-            self.reports[author_id] = Report(self)
+        if message.content.startswith(Report.START_KEYWORD):
+            reply = "Thank you for starting the reporting process. "
+            reply += "Say `help` at any time for more information.\n\n"
+            reply += "Please copy paste the link to the message you want to report.\n"
+            reply += "You can obtain this link by right-clicking the message and clicking `Copy Message Link`."
+            for r in [reply]:
+                await message.channel.send(r)
+        
+            
+        # Add active report only when the message and reported user is identified.
+        if self.current_report_key not in self.reports and self.report_identified:
+            self.reports[self.current_report_key] = [Report(self), self.reported_message]
+            
+        if self.report_identified:
+            self.report_summary += "User: " + message.content + "\n \n"
 
-        self.report_summary += "User: " + message.content + "\n \n"
+            # Let the report class handle this message; forward all the messages it returns to uss
+            responses = await self.reports[self.current_report_key][0].handle_message(message)
+            for r in responses:
+                await message.channel.send(r)
 
-        # Let the report class handle this message; forward all the messages it returns to uss
-        responses = await self.reports[author_id].handle_message(message)
-        for r in responses:
-            await message.channel.send(r)
+            self.report_summary += "Bot: " + str(responses) + "\n \n"
+            self.report_summary = parse_list(self.report_summary)
 
-        # self.report_summary += "Bot: " + str(responses) + "\n \n"
-        self.report_summary = parse_list(self.report_summary)
+            # If the report is complete or cancelled, remove it from our map
+            if self.reports[self.current_report_key][0].report_complete():
+                self.report_identified = False
+                self.report_summary = [self.report_summary[0].replace('\\n', '\n')]
+                # Gather report symmary
+                self.reports[self.current_report_key].append(self.report_summary)
 
-        # If the report is complete or cancelled, remove it from our map
-        if self.reports[author_id].report_complete():
-            self.report_summary = [self.report_summary[0].replace('\\n', '\n')]
-            # SEND TO MOD CHANNEL INSTEAD
-            for c in self.report_summary:
-                await self.mod_channel.send(c)
-            self.mod_flag = True
+                self.mod_ready = True
+                self.count += 1
+                self.report_summary = ["Report Summary " + f"({self.report_time}): \n"]
 
-            self.report_summary = [
-                "Report Summary " + f"({self.report_time}): \n"]
+            if self.reports[self.current_report_key][0].report_cancel() or message.content.lower() == "cancel":
+                self.report_summary = ["Report Summary " + f"({self.report_time}): \n"]
+                self.report_identified = False
+                self.reports.pop(self.current_report_key)
+        
 
     async def handle_channel_message(self, message):
         # Only handle messages sent in the "group-#" channel
@@ -166,22 +234,24 @@ class ModBot(discord.Client):
         print(incitement_flag)
 
         if incitement_flag:
-            author_id = message.author.id
-            self.author_id = author_id
+            self.author_name = message.author.name
+            self.author_id = message.author.id
+            self.reported_message = message.content
+            self.current_report_key = hash(str(self.author_id), self.reported_message)
 
-            if author_id not in self.reports:
-                self.reports[author_id] = Report(self)
-
-            await mod_channel.send(self.code_format(message))
-            self.mod_flag = True
+            if self.current_report_key not in self.reports:
+                self.reports[self.current_report_key] = [Report(self), self.reported_message, self.code_format(message)]
+                
+            self.count += 1
+            self.mod_ready = True
 
     def eval_text(self, message):
         return openai.classifyMessage(message)
 
     def code_format(self, message):
-        result = "The message  by" + "```" + message.author.name + ": " + message.content + "```" + "was evaluated to be in violation of" + \
+        result = "The message  by" + "```" + message.author.name + ": " + message.content + "```" + "was evaluated to be in violation of " + \
             "content policy against incitement of violence speech."
-        return result
+        return [result]
 
 
 client = ModBot()

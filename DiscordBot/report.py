@@ -17,6 +17,7 @@ class State(Enum):
     PROVIDE_CONTEXT = auto()
     ASK_TO_BLOCK = auto()
     REPORT_COMPLETE = auto()
+    REPORT_CANCEL = auto()
 
     MOD_DECIDE_INCITEMENT = auto()
     MOD_DECIDE_GENERAL_ABUSE = auto()
@@ -57,17 +58,11 @@ class Report:
     HELP_KEYWORD = "help"
 
     def __init__(self, client):
-        self.state = State.REPORT_START
+        self.state = State.AWAITING_MESSAGE
         self.client = client
-        self.message = None
         self.reported_user = None
 
-    async def handle_mod_message(self, message):
-        if self.state == State.REPORT_START: 
-            self.message = message.content
-            self.reported_user = message.author.name
-            self.state = State.REPORT_COMPLETE
-        
+    async def handle_mod_message(self, message, reported_user):
         # Load global report history
         history_path = 'history.json'
         history = None
@@ -75,6 +70,27 @@ class Report:
             raise Exception(f"{history_path} not found!")
         with open(history_path) as f:
             history = json.load(f)
+        
+        if reported_user:
+            print("hit reported_user true")
+            self.reported_user = reported_user
+            # Increment user report history: reported_count
+            if self.reported_user not in history:
+                history[self.reported_user] = Reported_User(1, 0, 0, 0)
+            else:
+                history[self.reported_user]['reported_count'] += 1
+
+            # Save it back to json file
+            with open(history_path, 'w') as file:
+                json.dump(history, file, cls=CustomEncoder)
+        
+        if self.state == State.AWAITING_MESSAGE:
+            self.reported_user = reported_user
+            self.state = State.MOD_DECIDE_INCITEMENT
+        
+        if self.state == State.REPORT_START: 
+            self.reported_user = message.author.name
+            self.state = State.REPORT_COMPLETE
 
         if self.state == State.REPORT_COMPLETE:
             print("State is", self.state)
@@ -224,6 +240,10 @@ class Report:
                 history[self.reported_user] = Reported_User(1, 1, 1, 0)
             else:
                 history[self.reported_user]['banned_count'] += 1
+                
+            # Save it back to json file
+            with open(history_path, 'w') as file:
+                json.dump(history, file, cls=CustomEncoder)
 
             reply = "Message submitted to team. Report completed. The user has been banned."
             self.state = State.MOD_FINISH
@@ -360,7 +380,7 @@ class Report:
             history = json.load(f)
 
         if message.content == self.CANCEL_KEYWORD:
-            self.state = State.REPORT_COMPLETE
+            self.state = State.REPORT_CANCEL
             return ["Report cancelled."]
 
 
@@ -537,5 +557,8 @@ class Report:
     def report_complete(self):
         return self.state == State.REPORT_COMPLETE
 
+    def report_cancel(self):
+        return self.state == State.REPORT_CANCEL
+    
     def mod_flow_complete(self):
         return self.state == State.MOD_FINISH
