@@ -13,7 +13,7 @@ with open(token_path) as f:
 client = OpenAI(api_key=api_key)
 
 '''
-def classifyMessage(message):
+def classify_message(message):
     conversation_history = [
         {"role": "system", "content": "You are a content moderation system. Classify whether each input constitutes an incitement to violence, self-harm included. Only answer in 'True' or 'False'"},
         {"role": "user", "content": "You should kill Jim because he's an asshole."},
@@ -40,7 +40,7 @@ def classifyMessage(message):
     return str2bool(assistant_response)
 '''
 
-def classifyMessage(message):
+def classify_message(message):
     return True
 
 

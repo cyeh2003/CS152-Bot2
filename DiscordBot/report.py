@@ -72,7 +72,6 @@ class Report:
             history = json.load(f)
         
         if reported_user:
-            print("hit reported_user true")
             self.reported_user = reported_user
             # Increment user report history: reported_count
             if self.reported_user not in history:
