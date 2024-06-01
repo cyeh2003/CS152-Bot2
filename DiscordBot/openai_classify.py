@@ -12,8 +12,8 @@ with open(token_path) as f:
 
 client = OpenAI(api_key=api_key)
 
-
-""" def classifyMessage(message):
+'''
+def classifyMessage(message):
     conversation_history = [
         {"role": "system", "content": "You are a content moderation system. Classify whether each input constitutes an incitement to violence, self-harm included. Only answer in 'True' or 'False'"},
         {"role": "user", "content": "You should kill Jim because he's an asshole."},
@@ -37,29 +37,8 @@ client = OpenAI(api_key=api_key)
 
     assistant_response = response.choices[0].message.content
     
-    # Add the assistant's response to the conversation history
-    conversation_history.append(
-        {"role": "assistant", "content": assistant_response})
-
-    if str2bool(assistant_response):
-        conversation_history = [{f"role": "user", "content": "Rank the severity of the input message on a scale of 1 to 5, 5 being the most threatening. Answer with a numerical value and do not give explanations. \
-                                     Examples: 1: mildly or vaguely threatening such as 'watch your back at work' or 'you better not show up tomorrow'; \
-                                     2: direct threat of minor harm, such as 'I'll make sure you regret this'; 3: strong threat of major harm such as 'I'll break your legs'; \
-                                     4: explicitly threatens serious harm or death such as 'I'm going to kill you'; 5: explicitly incites urges or proclaims imminent danger,  \
-                                     such as 'You should kill him' or 'let's shoot up a school'; Handle everything related to self harm as 5. \n message: {message}"
-                                     }]
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=conversation_history
-        )
-        assistant_response = response.choices[0].message.content
-        result.append(assistant_response)
-    else:
-        return False
-    
     return str2bool(assistant_response)
-    """
-
+'''
 
 def classifyMessage(message):
     return True
