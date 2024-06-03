@@ -4,6 +4,7 @@ import re
 import asyncio
 import json
 import os
+import encrypt as encryption
 
 
 class State(Enum):
@@ -61,6 +62,7 @@ class Report:
         self.state = State.AWAITING_MESSAGE
         self.client = client
         self.reported_user = None
+        self.encryption_key = b'\xa5\xd2^t\x00pp\xb7\xbc\xd1|\x1f\x05=\x81W\x10\xdf(A+\xdcK\xab\xd5 sE0\xe7\x1f,'
 
     async def handle_mod_message(self, message, reported_user):
         # Load global report history
@@ -72,23 +74,14 @@ class Report:
             history = json.load(f)
         
         if reported_user:
-            self.reported_user = reported_user
-            # Increment user report history: reported_count
-            if self.reported_user not in history:
-                history[self.reported_user] = Reported_User(1, 0, 0, 0)
-            else:
-                history[self.reported_user]['reported_count'] += 1
-
-            # Save it back to json file
-            with open(history_path, 'w') as file:
-                json.dump(history, file, cls=CustomEncoder)
+            self.reported_user = encryption.encrypt(reported_user, self.encryption_key)
         
         if self.state == State.AWAITING_MESSAGE:
-            self.reported_user = reported_user
+            self.reported_user = encryption.encrypt(reported_user, self.encryption_key)
             self.state = State.MOD_DECIDE_INCITEMENT
         
         if self.state == State.REPORT_START: 
-            self.reported_user = message.author.name
+            self.reported_user = encryption.encrypt(message.author.name, self.encryption_key)
             self.state = State.REPORT_COMPLETE
 
         if self.state == State.REPORT_COMPLETE:
@@ -101,6 +94,16 @@ class Report:
 
         if self.state == State.MOD_DECIDE_INCITEMENT:
             print("State is", self.state)
+            
+            # Increment user report history: reported_count
+            if self.reported_user not in history:
+                history[self.reported_user] = Reported_User(1, 0, 0, 0)
+            else:
+                history[self.reported_user]['reported_count'] += 1
+
+            # Save it back to json file
+            with open(history_path, 'w') as file:
+                json.dump(history, file, cls=CustomEncoder)
 
             if message.content.lower() not in ["yes", "no"]:
                 reply = "Please respond in Yes or No."
@@ -111,6 +114,7 @@ class Report:
                 else:
                     reply = "Based on the report summary above, do you find that this content violates its category policy?"
                     self.state = State.MOD_DECIDE_GENERAL_ABUSE
+                    
             return [reply]
 
         if self.state == State.MOD_DECIDE_GENERAL_ABUSE:
@@ -200,6 +204,7 @@ class Report:
                         history[self.reported_user] = Reported_User(1, 0, 1, 0)
                     else:
                         history[self.reported_user]['violation_count'] += 1
+                        
 
                     # Save it back to json file
                     with open(history_path, 'w') as file:
@@ -281,18 +286,18 @@ class Report:
                     reply = "1: One week\n2: Permanent"
                     self.state = State.MOD_CHOOSE_BAN_DURATION
                 elif message.content == "2":
-                    user = self.reported_user
-                    reported_count = history[user]['reported_count']
-                    banned_count = history[user]['banned_count']
-                    violation_count = history[user]['violation_count']
-                    blocked_count = history[user]['blocked_count']
+                    user = encryption.decrypt(self.reported_user, self.encryption_key)
+                    reported_count = history[self.reported_user]['reported_count']
+                    banned_count = history[self.reported_user]['banned_count']
+                    violation_count = history[self.reported_user]['violation_count']
+                    blocked_count = history[self.reported_user]['blocked_count']
                     reply = f"The user {user} has been:\n" + f"Reported {reported_count} times\n" + \
                         f"Violated policy {violation_count} times\n" + f"Blocked {blocked_count} times\n" + \
                             f"Banned {banned_count} times\n \n" + "What would you like to do?\n" + \
                         "1: Ban user\n" + "2: Escalate Report\n" + "3: Do not ban user\n"
                     self.state = State.MOD_INVESTIGATE
                 else:
-                    reply = f"{self.reported_user} will not be banned. Report completed."
+                    reply = f"{encryption.decrypt(self.reported_user, self.encryption_key)} will not be banned. Report completed."
                     self.state = State.MOD_FINISH
 
             return [reply]
@@ -311,7 +316,7 @@ class Report:
                     reply = "Confirm escalation?"
                 else:
                     self.state = State.MOD_FINISH
-                    reply = f"{self.reported_user} will not be banned. Report completed"
+                    reply = f"{encryption.decrypt(self.reported_user, self.encryption_key)} will not be banned. Report completed"
 
                 return [reply]
 
@@ -343,7 +348,7 @@ class Report:
         if self.state == State.MOD_TEMP_BAN_EXPLANATION:
             print("State is", self.state)
 
-            reply = f"{self.reported_user} has been banned for one week. Report completed."
+            reply = f"{encryption.decrypt(self.reported_user, self.encryption_key)} has been banned for one week. Report completed."
             self.state = State.MOD_FINISH
 
             return [reply]
@@ -351,7 +356,7 @@ class Report:
         if self.state == State.MOD_PERMA_BAN_EXPLANATION:
             print("State is", self.state)
 
-            reply = f"{self.reported_user} has been banned permanently. Escalate report to another team?"
+            reply = f"{encryption.decrypt(self.reported_user, self.encryption_key)} has been banned permanently. Escalate report to another team?"
             self.state = State.MOD_CHOOSE_ESCALATE
 
             return [reply]
@@ -426,7 +431,7 @@ class Report:
                 "Please select what the message is in violation of:\n" + category_1 + "\n" + category_2 + "\n" + \
                     category_3 + "\n" + category_4 + "\n" + category_5 + "\n" + category_6 + "\n" + category_7 + \
                 "\n" + category_8
-            self.reported_user = message.author.name
+            self.reported_user = encryption.encrypt(message.author.name, self.encryption_key)
             self.state = State.SELECT_CATEGORY
 
             return [reply]
@@ -485,7 +490,7 @@ class Report:
                     reply = "We’re sorry that you’ve experienced this content. Can you provide more context on your reasons for reporting this message?"
                     self.state = State.CHOOSE_PROVIDE_CONTEXT
                 else:
-                    reply = f"If this is an emergency, please dial 911. Your report has been submitted to the moderation team for immediate action. Would you like to block [{self.reported_user}]?"
+                    reply = f"If this is an emergency, please dial 911. Your report has been submitted to the moderation team for immediate action. Would you like to block [{encryption.decrypt(self.reported_user, self.encryption_key)}]?"
                     self.state = State.ASK_TO_BLOCK
 
             return [reply]
@@ -500,7 +505,7 @@ class Report:
                     reply = "Please provide additional context about the abuse you are reporting."
                     self.state = State.PROVIDE_CONTEXT
                 else:
-                    reply = f"Thank you for reporting this message. The moderation team has been informed of your report and will review it as quickly as possible. Would you like to block [{self.reported_user}]?"
+                    reply = f"Thank you for reporting this message. The moderation team has been informed of your report and will review it as quickly as possible. Would you like to block [{encryption.decrypt(self.reported_user, self.encryption_key)}]?"
                     self.state = State.ASK_TO_BLOCK
 
             return [reply]
@@ -517,14 +522,14 @@ class Report:
                             + "\n \n" + "If there is an immediate threat, please contact emergency services immediately."
                     self.state = State.PROVIDE_CONTEXT
                 else:
-                    reply = f"Your report has been sumbitted for review. Would you like to block [{self.reported_user}]?"
+                    reply = f"Your report has been sumbitted for review. Would you like to block [{encryption.decrypt(self.reported_user, self.encryption_key)}]?"
                     self.state = State.ASK_TO_BLOCK
 
             return [reply]
 
         if self.state == State.PROVIDE_CONTEXT:
             print("State is", self.state)
-            reply = f"Thank you for reporting this message. The moderation team has been informed of your report and will review it as quickly as possible. Would you like to block [{self.reported_user}]?"
+            reply = f"Thank you for reporting this message. The moderation team has been informed of your report and will review it as quickly as possible. Would you like to block [{encryption.decrypt(self.reported_user, self.encryption_key)}]?"
             self.state = State.ASK_TO_BLOCK
 
             return [reply]
@@ -535,7 +540,7 @@ class Report:
                 reply = "Please respond in yes or no."
             else:
                 if message.content.lower() == "yes":
-                    reply = f"{self.reported_user} has been blocked. Thank you for keeping our community safe. Have a good day!"
+                    reply = f"{encryption.decrypt(self.reported_user, self.encryption_key)} has been blocked. Thank you for keeping our community safe. Have a good day!"
                     # Increment user report history: blocked_count
                     if self.reported_user not in history:
                         history[self.reported_user] = Reported_User(1, 0, 0, 1)

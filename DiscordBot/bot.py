@@ -233,8 +233,7 @@ class ModBot(discord.Client):
             self.current_report_key = hash(str(self.author_id), self.reported_message)
 
             if self.current_report_key not in self.reports:
-                self.reports[self.current_report_key] = [Report(self), self.reported_message, self.code_format(message)]
-                
+                self.reports[self.current_report_key] = [Report(self), self.reported_message, self.code_format(message)]   
             self.count += 1
 
     # Wrapper function for classify_message in openai_classify.py, currently set to return true always. 
