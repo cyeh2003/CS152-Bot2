@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import encrypt as encryption
+from datetime import datetime
 
 
 class State(Enum):
@@ -63,6 +64,7 @@ class Report:
         self.client = client
         self.reported_user = None
         self.encryption_key = b'\xa5\xd2^t\x00pp\xb7\xbc\xd1|\x1f\x05=\x81W\x10\xdf(A+\xdcK\xab\xd5 sE0\xe7\x1f,'
+        self.summary = f'Report Summary: {datetime.now()} \n'
 
     async def handle_mod_message(self, message, reported_user):
         # Load global report history
@@ -433,6 +435,7 @@ class Report:
                 "\n" + category_8
             self.reported_user = encryption.encrypt(message.author.name, self.encryption_key)
             self.state = State.SELECT_CATEGORY
+            self.summary += "Reported Message: "+ "```" + message.author.name + ": " + message.content + "```"
 
             return [reply]
 
@@ -447,18 +450,25 @@ class Report:
                     general_message = "We’re sorry that you’ve experienced this content. Can you provide more context on your reasons for reporting this message?"
                     if message.content == "1":
                         reply = "You've selected Harassment. " + general_message
+                        self.summary += "Category: Harassment \n"
                     elif message.content == "2":
                         reply = "You've selected Spam. " + general_message
+                        self.summary += "Category: Spam \n"
                     elif message.content == "4":
                         reply = "You've selected Hate speech or offensive content. " + general_message
+                        self.summary += "Category: Offensive Content \n"
                     elif message.content == "5":
                         reply = "You've selected Bullying or personal attacks. " + general_message
+                        self.summary += "Category: Bullying or Personal Attacks \n"
                     elif message.content == "6":
                         reply = "You've selected Illegal activity. " + general_message
+                        self.summary += "Category: Illegal Activity \n"
                     elif message.content == "7":
                         reply = "You've selected False information. " + general_message
+                        self.summary += "Category: False Information \n"
                     else:
                         reply = "You've selected It's obscene. " + general_message
+                        self.summary += "Category: Obscenity \n"
                     self.state = State.CHOOSE_PROVIDE_GENERAL_CONTEXT
                 else:
                     sub_category_1 = "1: Incitement to violence"
@@ -486,12 +496,18 @@ class Report:
             if message.content not in ["1", "2", "3"]:
                 reply = "Please select from the provided list with numbers."
             else:
-                if message.content == "1" or message.content == "2":
+                if message.content == "1":
                     reply = "We’re sorry that you’ve experienced this content. Can you provide more context on your reasons for reporting this message?"
                     self.state = State.CHOOSE_PROVIDE_CONTEXT
+                    self.summary += "Category: Violent Content (Incitement to Violence) \n"
+                elif message.content == "2":
+                    reply = "We’re sorry that you’ve experienced this content. Can you provide more context on your reasons for reporting this message?"
+                    self.state = State.CHOOSE_PROVIDE_CONTEXT
+                    self.summary += "Category: Violent Content (Glorification of Violence) \n"
                 else:
                     reply = f"If this is an emergency, please dial 911. Your report has been submitted to the moderation team for immediate action. Would you like to block [{encryption.decrypt(self.reported_user, self.encryption_key)}]?"
                     self.state = State.ASK_TO_BLOCK
+                    self.summary += "Category: Violent Content (Threat of Harm of Oneself or Others) \n"
 
             return [reply]
 
@@ -531,6 +547,7 @@ class Report:
             print("State is", self.state)
             reply = f"Thank you for reporting this message. The moderation team has been informed of your report and will review it as quickly as possible. Would you like to block [{encryption.decrypt(self.reported_user, self.encryption_key)}]?"
             self.state = State.ASK_TO_BLOCK
+            self.summary += f"User provided context: {message.content} \n"
 
             return [reply]
 
@@ -552,9 +569,11 @@ class Report:
                         json.dump(history, file, cls=CustomEncoder)
 
                     self.state = State.REPORT_COMPLETE
+                    self.summary += "Block reported user: Yes \n"
                 else:
                     reply = "Thank you for keeping our community safe. Have a good day!"
                     self.state = State.REPORT_COMPLETE
+                    self.summary += "Block reported user: No\n"
 
             return [reply]
 

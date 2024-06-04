@@ -54,7 +54,6 @@ class ModBot(discord.Client):
         self.group_num = None
         self.mod_channels = {}  # Map from guild to the mod channel id for that guild
         self.reports = {}  # Map from reported user id + reported message to the report against them
-        self.report_summary = ["Report Summary " + f"({self.report_time}): \n"]
         self.mod_channel = None
         self.author_id = None
         self.reported_message = None
@@ -191,27 +190,20 @@ class ModBot(discord.Client):
             self.reports[self.current_report_key] = [Report(self), self.reported_message]
             
         if self.report_identified:
-            self.report_summary += "User: " + message.content + "\n \n"
 
             responses = await self.reports[self.current_report_key][0].handle_message(message)
             for r in responses:
                 await message.channel.send(r)
 
-            self.report_summary += "Bot: " + str(responses) + "\n \n"
-            self.report_summary = parse_list(self.report_summary)
-
             # If the report is complete or cancelled, remove it from our map
             if self.reports[self.current_report_key][0].report_complete():
                 self.report_identified = False
-                self.report_summary = [self.report_summary[0].replace('\\n', '\n')]
-                # Generate report symmary
-                self.reports[self.current_report_key].append(self.report_summary)
+                # Generate report symmary ##### CHANGED
+                self.reports[self.current_report_key].append([self.reports[self.current_report_key][0].summary])
                 self.count += 1
-                self.report_summary = ["Report Summary " + f"({self.report_time}): \n"]
 
             # If report canceled during the process, pop the report from map and set flags accordingly.
             if self.reports[self.current_report_key][0].report_cancel() or message.content.lower() == "cancel":
-                self.report_summary = ["Report Summary " + f"({self.report_time}): \n"]
                 self.report_identified = False
                 self.reports.pop(self.current_report_key)
         
