@@ -1,1 +1,50 @@
-{"ay.eye.two.five": {"reported_count": 6, "banned_count": 1, "violation_count": 2, "blocked_count": 5}, "marcustardy": {"reported_count": 23, "banned_count": 3, "violation_count": 9, "blocked_count": 17}, "ashleydai2003": {"reported_count": 2, "banned_count": 0, "violation_count": 1, "blocked_count": 1}, "henrypalmer1": {"reported_count": 8, "banned_count": 0, "violation_count": 5, "blocked_count": 5}, "null": {"reported_count": 1, "banned_count": 0, "violation_count": 1, "blocked_count": 0}, "utetherbooks": {"reported_count": 4, "banned_count": 0, "violation_count": 2, "blocked_count": 4}}
+{
+    "ay.eye.two.five": {
+        "reported_count": 34,
+        "banned_count": 3,
+        "violation_count": 4,
+        "blocked_count": 14
+    },
+    "marcustardy": {
+        "reported_count": 123,
+        "banned_count": 10,
+        "violation_count": 21,
+        "blocked_count": 20
+    },
+    "ashleydai2003": {
+        "reported_count": 5,
+        "banned_count": 0,
+        "violation_count": 2,
+        "blocked_count": 4
+    },
+    "null": {
+        "reported_count": 1,
+        "banned_count": 0,
+        "violation_count": 1,
+        "blocked_count": 0
+    },
+    "henrypalmer1": {
+        "reported_count": 35,
+        "banned_count": 0,
+        "violation_count": 0,
+        "blocked_count": 18
+    },
+    "utetherbooks": {
+        "reported_count": 8,
+        "banned_count": 0,
+        "violation_count": 0,
+        "blocked_count": 2
+    },
+    "5e056b22e09092df977cebdd9efa2a8c": {
+        "reported_count": 10,
+        "banned_count": 1,
+        "violation_count": 2,
+        "blocked_count": 0
+    },
+    "4cab81af02beeb77c1aeca3458467918": {
+        "reported_count": 6,
+        "banned_count": 1,
+        "violation_count": 1,
+        "blocked_count": 5
+    }
+}
