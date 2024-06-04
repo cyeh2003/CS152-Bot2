@@ -36,15 +36,6 @@ def hash(a, b):
     return hash_object.hexdigest()
 
 
-def parse_list(input_list):
-    joined_string = ''.join(input_list)
-    string_list = joined_string.split(',')
-    cleaned_list = [s.replace('[', '').replace(']', '')
-                    for s in string_list]
-
-    return cleaned_list
-
-
 class ModBot(discord.Client):
     def __init__(self):
         self.report_time = datetime.now()
