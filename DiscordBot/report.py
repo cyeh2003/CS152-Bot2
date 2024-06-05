@@ -79,20 +79,18 @@ class Report:
             self.reported_user = encryption.encrypt(reported_user, self.encryption_key)
         
         if self.state == State.AWAITING_MESSAGE:
+            print("State is", self.state)
             self.reported_user = encryption.encrypt(reported_user, self.encryption_key)
             self.state = State.MOD_DECIDE_INCITEMENT
         
-        if self.state == State.REPORT_START: 
+        if self.state == State.REPORT_START:
+            print("State is", self.state) 
             self.reported_user = encryption.encrypt(message.author.name, self.encryption_key)
             self.state = State.REPORT_COMPLETE
 
         if self.state == State.REPORT_COMPLETE:
             print("State is", self.state)
-
-            reply = "\n \n" + \
-                "Based on the report summary, is this report related to incitement of violence?"
             self.state = State.MOD_DECIDE_INCITEMENT
-            return [reply]
 
         if self.state == State.MOD_DECIDE_INCITEMENT:
             print("State is", self.state)
@@ -417,7 +415,7 @@ class Report:
                 return ["It seems this message was deleted or never existed. Please try again or say `cancel` to cancel."]
 
             self.state = State.MESSAGE_IDENTIFIED
-
+    
 
         if self.state == State.MESSAGE_IDENTIFIED:
             print("State is", self.state)
